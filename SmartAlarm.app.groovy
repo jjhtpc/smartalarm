@@ -96,7 +96,7 @@ def pageSetupMenu() {
     def pageProperties = [
         name:       "pageSetupMenu",
         title:      "Control Panel",
-        nextPage:   null,
+	nextPage:   null,
         install:    true,
         uninstall:  state.installed
     ]
@@ -296,6 +296,13 @@ def pageAlarmSettings() {
         title:          "Secondary phone number",
         required:       false
     ]
+    def inputPushBullets = [
+    	name:			"pushbullets",
+        type: 			"device.pushbullet",
+        title: 			"Which Pushbulet Devices?",
+        multiple: true,
+        required: false
+    ]    
 
     def pageProperties = [
         name:       "pageAlarmSettings",
@@ -332,6 +339,9 @@ def pageAlarmSettings() {
             input inputPushMessage
             input inputPhone1
             input inputPhone2
+        }
+		section("Report to the following Pushbullet devices...") {
+    		input inputPushBullets
         }
     }
 }
@@ -536,8 +546,7 @@ def installed() {
 }
 
 def updated() {
-    TRACE("updated()")
-
+	TRACE("updated()")
     unschedule()
     unsubscribe()
     initialize()
@@ -597,6 +606,31 @@ private initialize() {
     STATE()
 }
 
+
+def updateState() {    
+	state.currentState = [mode: location.mode]
+}
+
+def report() {  
+	updateState()
+    log.debug "report message: ${getMessage()}"
+    pushbullets.each() {it ->
+    	it.push("SmartThings $location State", getMessage())
+    }
+}
+
+def getMessage() {
+    new groovy.json.JsonBuilder(new TreeMap(state.currentState + [updated : getTS()])) as String
+}
+
+
+
+def getTS() {
+	def tf = new java.text.SimpleDateFormat("h:mm a")
+    tf.setTimeZone(location.timeZone)
+    "${tf.format(new Date())}"
+}
+
 def resetPanel() {
     TRACE("resetPanel()")
 
@@ -642,7 +676,8 @@ private def panelStatus() {
 
     // use sendNotificationEvent instead of Push/SMS on panel status change
     //notify(msg)
-    sendNotificationEvent(msg)
+    myRunIn(10, report)
+    //sendNotificationEvent(msg)
 }
 
 private def zoneInit(n) {
@@ -998,9 +1033,9 @@ private def getAccessToken() {
     if (atomicState.accessToken) {
         return atomicState.accessToken
     }
-
+	
     def token = createAccessToken()
-    TRACE("Created new access token: ${token})")
+    TRACE("Created new access token: ${token}")
 
     return token
 }
@@ -1039,10 +1074,11 @@ private def textLicense() {
 }
 
 private def TRACE(message) {
-    //log.debug message
+    log.debug message
 }
 
 private def STATE() {
     log.trace "settings: ${settings}"
     log.trace "state: ${state}"
 }
+
